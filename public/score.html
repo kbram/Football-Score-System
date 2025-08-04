@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>Live Football Score</title>
+        <script src="https://cdn.jsdelivr.net/npm/laravel-echo/dist/echo.iife.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/pusher-js@7.2.0/dist/web/pusher.min.js"></script>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 40px;
+            }
+            .score {
+                font-size: 2em;
+                margin-bottom: 10px;
+            }
+            .status {
+                font-size: 1.2em;
+                color: #555;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Live Football Score</h1>
+        <div class="score" id="score">Loading...</div>
+        <div class="status" id="status"></div>
+        <script>
+            // Replace with your WebSocket host and port if needed
+            window.Echo = new Echo({
+                broadcaster: "pusher",
+                key: "local",
+                wsHost: window.location.hostname,
+                wsPort: 6001,
+                forceTLS: false,
+                disableStats: true,
+                enabledTransports: ["ws", "wss"],
+            });
+
+            Echo.channel("football.match").listen("ScoreUpdated", (e) => {
+                document.getElementById(
+                    "score"
+                ).textContent = `${e.teamA} ${e.scoreA} - ${e.scoreB} ${e.teamB}`;
+                document.getElementById("status").textContent = e.status;
+            });
+        </script>
+    </body>
+</html>
