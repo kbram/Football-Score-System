@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Live Football Scores - Real-time Updates</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script src="https://js.pusher.com/8.2.0/pusher.min.js"></script>
+    </head>
+    <body class="bg-gray-100">
+        <div class="container mx-auto px-4 py-8">
+            <!-- Header -->
+            <div class="text-center mb-8">
+                <h1 class="text-4xl font-bold text-gray-800 mb-2">
+                    ⚽ Live Football Scores
+                </h1>
+                <p class="text-gray-600">
+                    Real-time score updates with WebSocket technology
+                </p>
+            </div>
+
+            <!-- Connection Status -->
+            <div class="mb-6 text-center">
+                <div
+                    id="connection-status"
+                    class="inline-flex items-center px-4 py-2 rounded-full text-sm"
+                >
+                    <div
+                        class="w-3 h-3 bg-red-500 rounded-full mr-2 animate-pulse"
+                        id="status-indicator"
+                    ></div>
+                    <span id="status-text">Connecting to live feed...</span>
+                </div>
+            </div>
+
+            <!-- Live Matches Grid -->
+            <div
+                id="matches-container"
+                class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8"
+            >
+                <!-- Matches will be loaded here -->
+            </div>
+
+            <!-- Demo Controls (for testing) -->
+            <div class="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-semibold text-gray-800 mb-4">
+                    🎮 Demo Controls
+                </h3>
+                <p class="text-sm text-gray-600 mb-4">
+                    Use these buttons to simulate real-time events:
+                </p>
+
+                <div class="space-y-3">
+                    <button
+                        id="demo-goal"
+                        class="w-full bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+                    >
+                        ⚽ Simulate Goal
+                    </button>
+                    <button
+                        id="demo-status"
+                        class="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+                    >
+                        📊 Change Status
+                    </button>
+                    <button
+                        id="demo-time"
+                        class="w-full bg-orange-500 hover:bg-orange-700 text-white font-bold py-2 px-4 rounded"
+                    >
+                        ⏱️ Update Time
+                    </button>
+                </div>
+
+                <div class="mt-4 pt-4 border-t border-gray-200">
+                    <p class="text-xs text-gray-500">
+                        Open multiple browser tabs to see real-time
+                        synchronization in action!
+                    </p>
+                </div>
+            </div>
+
+            <!-- Events Feed -->
+            <div class="max-w-2xl mx-auto mt-8 bg-white rounded-lg shadow-lg">
+                <div class="p-4 border-b border-gray-200">
+                    <h3 class="text-lg font-semibold text-gray-800">
+                        📰 Live Events Feed
+                    </h3>
+                </div>
+                <div class="p-4">
+                    <div
+                        id="events-feed"
+                        class="space-y-3 max-h-64 overflow-y-auto"
+                    >
+                        <!-- Events will be populated here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            // Configuration
+            const WEBSOCKET_CONFIG = {
+                key: "local-key",
+                cluster: "mt1",
+                wsHost: "localhost",
+                wsPort: 8080,
+                forceTLS: false,
+                enabledTransports: ["ws", "wss"],
+            };
+
+            // Sample matches data (replace with actual API call)
+            let sampleMatches = [
+                {
+                    id: 1,
+                    team_a: "Manchester United",
+                    team_b: "Liverpool FC",
+                    team_a_score: 2,
+                    team_b_score: 1,
+                    status: "in_progress",
+                    status_text: "In Progress",
+                    match_time: 65,
+                    formatted_score: "2 - 1",
+                    match_title: "Manchester United vs Liverpool FC",
+                },
+                {
+                    id: 2,
+                    team_a: "Arsenal",
+                    team_b: "Chelsea",
+                    team_a_score: 0,
+                    team_b_score: 0,
+                    status: "half_time",
+                    status_text: "Half Time",
+                    match_time: 45,
+                    formatted_score: "0 - 0",
+                    match_title: "Arsenal vs Chelsea",
+                },
+            ];
+
+            // Initialize WebSocket connection
+            const pusher = new Pusher(WEBSOCKET_CONFIG.key, WEBSOCKET_CONFIG);
+
+            // Subscribe to global matches channel
+            const globalChannel = pusher.subscribe("football-matches");
+
+            // Connection event handlers
+            pusher.connection.bind("connected", function () {
+                updateConnectionStatus(
+                    "connected",
+                    "🟢 Connected to live feed",
+                    "bg-green-100 text-green-800"
+                );
+                addEventToFeed(
+                    "System",
+                    "Connected to live feed",
+                    "connection"
+                );
+            });
+
+            pusher.connection.bind("disconnected", function () {
+                updateConnectionStatus(
+                    "disconnected",
+                    "🔴 Disconnected",
+                    "bg-red-100 text-red-800"
+                );
+                addEventToFeed("System", "Connection lost", "error");
+            });
+
+            pusher.connection.bind("connecting", function () {
+                updateConnectionStatus(
+                    "connecting",
+                    "🟡 Connecting...",
+                    "bg-yellow-100 text-yellow-800"
+                );
+            });
+
+            // Listen for score updates
+            globalChannel.bind("score.updated", function (data) {
+                console.log("Received live update:", data);
+                updateMatchInGrid(data.match);
+                addEventToFeed(
+                    data.match.match_title,
+                    data.event_data.message || "Match updated",
+                    data.event_type
+                );
+            });
+
+            // Subscribe to individual match channels for sample matches
+            sampleMatches.forEach((match) => {
+                const matchChannel = pusher.subscribe(
+                    `football-match.${match.id}`
+                );
+                matchChannel.bind("score.updated", function (data) {
+                    console.log(`Match ${match.id} update:`, data);
+                    updateMatchInGrid(data.match);
+                    addEventToFeed(
+                        data.match.match_title,
+                        data.event_data.message || "Match updated",
+                        data.event_type
+                    );
+                });
+            });
+
+            // Initialize the page
+            document.addEventListener("DOMContentLoaded", function () {
+                renderMatches();
+                setupDemoControls();
+
+                // Add initial connection event
+                addEventToFeed("System", "Live score client started", "system");
+            });
+
+            // Render matches in the grid
+            function renderMatches() {
+                const container = document.getElementById("matches-container");
+                container.innerHTML = "";
+
+                sampleMatches.forEach((match) => {
+                    const matchCard = createMatchCard(match);
+                    container.appendChild(matchCard);
+                });
+            }
+
+            // Create match card element
+            function createMatchCard(match) {
+                const card = document.createElement("div");
+                card.className =
+                    "bg-white rounded-lg shadow-lg overflow-hidden";
+                card.id = `match-${match.id}`;
+
+                const statusColor = getStatusColor(match.status);
+
+                card.innerHTML = `
+                <div class="bg-gradient-to-r from-blue-600 to-green-600 text-white p-4">
+                    <div class="flex justify-between items-center text-sm">
+                        <span class="font-medium">${match.status_text}</span>
+                        <span>${match.match_time}'</span>
+                    </div>
+                </div>
+                
+                <div class="p-6">
+                    <div class="grid grid-cols-3 gap-4 items-center">
+                        <div class="text-center">
+                            <div class="text-lg font-bold text-gray-800 mb-2">${
+                                match.team_a
+                            }</div>
+                            <div class="text-3xl font-bold text-blue-600">${
+                                match.team_a_score
+                            }</div>
+                        </div>
+                        
+                        <div class="text-center">
+                            <div class="text-lg font-bold text-gray-400">VS</div>
+                            <div class="text-sm text-gray-600">${
+                                match.match_time
+                            }'</div>
+                        </div>
+                        
+                        <div class="text-center">
+                            <div class="text-lg font-bold text-gray-800 mb-2">${
+                                match.team_b
+                            }</div>
+                            <div class="text-3xl font-bold text-red-600">${
+                                match.team_b_score
+                            }</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-gray-50 px-6 py-3">
+                    <div class="text-center text-sm text-gray-600">
+                        Last updated: <span class="font-medium" id="last-updated-${
+                            match.id
+                        }">${new Date().toLocaleTimeString()}</span>
+                    </div>
+                </div>
+            `;
+
+                return card;
+            }
+
+            // Update match in grid when receiving WebSocket updates
+            function updateMatchInGrid(match) {
+                const card = document.getElementById(`match-${match.id}`);
+                if (card) {
+                    // Update scores
+                    const teamAScore = card.querySelector(".text-blue-600");
+                    const teamBScore = card.querySelector(".text-red-600");
+                    const statusSpan = card.querySelector(".font-medium");
+                    const timeSpans = card.querySelectorAll(".text-sm");
+                    const lastUpdated = document.getElementById(
+                        `last-updated-${match.id}`
+                    );
+
+                    if (teamAScore) teamAScore.textContent = match.team_a_score;
+                    if (teamBScore) teamBScore.textContent = match.team_b_score;
+                    if (statusSpan) statusSpan.textContent = match.status_text;
+                    if (lastUpdated)
+                        lastUpdated.textContent =
+                            new Date().toLocaleTimeString();
+
+                    // Update time displays
+                    timeSpans.forEach((span) => {
+                        if (span.textContent.includes("'")) {
+                            span.textContent = match.match_time + "'";
+                        }
+                    });
+
+                    // Add update animation
+                    card.style.transform = "scale(1.02)";
+                    card.style.transition = "transform 0.2s ease";
+                    setTimeout(() => {
+                        card.style.transform = "scale(1)";
+                    }, 200);
+                } else {
+                    // Add new match if it doesn't exist
+                    sampleMatches.push(match);
+                    renderMatches();
+                }
+            }
+
+            // Get status color for styling
+            function getStatusColor(status) {
+                const colors = {
+                    not_started: "bg-gray-500",
+                    in_progress: "bg-green-500",
+                    half_time: "bg-yellow-500",
+                    finished: "bg-gray-800",
+                };
+                return colors[status] || "bg-gray-500";
+            }
+
+            // Update connection status
+            function updateConnectionStatus(status, text, classes) {
+                const indicator = document.getElementById("status-indicator");
+                const statusText = document.getElementById("status-text");
+                const container = document.getElementById("connection-status");
+
+                // Reset classes
+                container.className =
+                    "inline-flex items-center px-4 py-2 rounded-full text-sm";
+                container.classList.add(...classes.split(" "));
+
+                statusText.textContent = text;
+
+                if (status === "connected") {
+                    indicator.className =
+                        "w-3 h-3 bg-green-500 rounded-full mr-2";
+                } else if (status === "connecting") {
+                    indicator.className =
+                        "w-3 h-3 bg-yellow-500 rounded-full mr-2 animate-pulse";
+                } else {
+                    indicator.className =
+                        "w-3 h-3 bg-red-500 rounded-full mr-2 animate-pulse";
+                }
+            }
+
+            // Add event to live feed
+            function addEventToFeed(matchTitle, message, eventType) {
+                const feed = document.getElementById("events-feed");
+                const eventDiv = document.createElement("div");
+
+                const icon = getEventIcon(eventType);
+                const timestamp = new Date().toLocaleTimeString();
+
+                eventDiv.className =
+                    "flex items-start space-x-3 p-3 bg-gray-50 rounded border-l-4 border-blue-500";
+                eventDiv.innerHTML = `
+                <div class="text-lg">${icon}</div>
+                <div class="flex-1">
+                    <div class="font-medium text-gray-800">${matchTitle}</div>
+                    <div class="text-sm text-gray-600">${message}</div>
+                </div>
+                <div class="text-xs text-gray-500">${timestamp}</div>
+            `;
+
+                feed.insertBefore(eventDiv, feed.firstChild);
+
+                // Keep only last 15 events
+                while (feed.children.length > 15) {
+                    feed.removeChild(feed.lastChild);
+                }
+
+                // Animate new event
+                eventDiv.style.opacity = "0";
+                eventDiv.style.transform = "translateY(-10px)";
+                setTimeout(() => {
+                    eventDiv.style.transition = "all 0.3s ease";
+                    eventDiv.style.opacity = "1";
+                    eventDiv.style.transform = "translateY(0)";
+                }, 10);
+            }
+
+            // Get icon for event type
+            function getEventIcon(eventType) {
+                const icons = {
+                    score_update: "⚽",
+                    status_update: "📊",
+                    time_update: "⏱️",
+                    match_created: "🆕",
+                    match_updated: "✏️",
+                    connection: "🔗",
+                    system: "🖥️",
+                    error: "❌",
+                };
+                return icons[eventType] || "📝";
+            }
+
+            // Setup demo controls
+            function setupDemoControls() {
+                document
+                    .getElementById("demo-goal")
+                    .addEventListener("click", function () {
+                        simulateGoal();
+                    });
+
+                document
+                    .getElementById("demo-status")
+                    .addEventListener("click", function () {
+                        simulateStatusChange();
+                    });
+
+                document
+                    .getElementById("demo-time")
+                    .addEventListener("click", function () {
+                        simulateTimeUpdate();
+                    });
+            }
+
+            // Demo functions (simulate WebSocket events)
+            function simulateGoal() {
+                const randomMatch =
+                    sampleMatches[
+                        Math.floor(Math.random() * sampleMatches.length)
+                    ];
+                const isTeamA = Math.random() > 0.5;
+
+                if (isTeamA) {
+                    randomMatch.team_a_score++;
+                } else {
+                    randomMatch.team_b_score++;
+                }
+
+                randomMatch.formatted_score = `${randomMatch.team_a_score} - ${randomMatch.team_b_score}`;
+
+                const goalTeam = isTeamA
+                    ? randomMatch.team_a
+                    : randomMatch.team_b;
+
+                // Simulate WebSocket update
+                const simulatedData = {
+                    match: randomMatch,
+                    event_type: "score_update",
+                    event_data: {
+                        message: `⚽ GOAL! ${goalTeam} scores! ${randomMatch.formatted_score}`,
+                    },
+                };
+
+                updateMatchInGrid(simulatedData.match);
+                addEventToFeed(
+                    simulatedData.match.match_title,
+                    simulatedData.event_data.message,
+                    simulatedData.event_type
+                );
+            }
+
+            function simulateStatusChange() {
+                const randomMatch =
+                    sampleMatches[
+                        Math.floor(Math.random() * sampleMatches.length)
+                    ];
+                const statuses = [
+                    { status: "not_started", text: "Not Started" },
+                    { status: "in_progress", text: "In Progress" },
+                    { status: "half_time", text: "Half Time" },
+                    { status: "finished", text: "Finished" },
+                ];
+
+                const newStatus =
+                    statuses[Math.floor(Math.random() * statuses.length)];
+                randomMatch.status = newStatus.status;
+                randomMatch.status_text = newStatus.text;
+
+                const simulatedData = {
+                    match: randomMatch,
+                    event_type: "status_update",
+                    event_data: {
+                        message: `Status changed to: ${newStatus.text}`,
+                    },
+                };
+
+                updateMatchInGrid(simulatedData.match);
+                addEventToFeed(
+                    simulatedData.match.match_title,
+                    simulatedData.event_data.message,
+                    simulatedData.event_type
+                );
+            }
+
+            function simulateTimeUpdate() {
+                const randomMatch =
+                    sampleMatches[
+                        Math.floor(Math.random() * sampleMatches.length)
+                    ];
+                randomMatch.match_time = Math.floor(Math.random() * 90);
+
+                const simulatedData = {
+                    match: randomMatch,
+                    event_type: "time_update",
+                    event_data: {
+                        message: `Match time: ${randomMatch.match_time} minutes`,
+                    },
+                };
+
+                updateMatchInGrid(simulatedData.match);
+                addEventToFeed(
+                    simulatedData.match.match_title,
+                    simulatedData.event_data.message,
+                    simulatedData.event_type
+                );
+            }
+
+            // Auto-refresh backup (every 30 seconds)
+            setInterval(function () {
+                addEventToFeed("System", "Auto-refresh check", "system");
+            }, 30000);
+        </script>
+    </body>
+</html>
