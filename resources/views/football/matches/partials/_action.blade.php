@@ -1,4 +1,4 @@
-<div class="flex space-x-2">
+<div class="flex justify-center items-center space-x-2">
     <a href="{{ route('football.matches.show', $match->id) }}"
         class="bg-blue-500 hover:bg-blue-700 text-white text-xs font-bold py-1 px-2 rounded" title="View Match">
         👁️
