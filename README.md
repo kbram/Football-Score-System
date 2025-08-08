@@ -125,7 +125,7 @@ php artisan db:seed --class=FootballMatchSeeder
 * * * * * cd /path-to-your-project && php artisan schedule:run >> /dev/null 2>&1
 
 # Or manually test the timer command
-php artisan matches:update-timers
+php artisan football:update-timers
 ```
 
 ### 4. Build Assets
@@ -181,7 +181,7 @@ php artisan reverb:start
 npm run dev
 
 # Terminal 4 - Start the automatic timer system (optional for manual testing)
-php artisan matches:update-timers
+php artisan football:update-timers
 ```
 
 ### Method 2: Using Laravel Sail (Docker)
@@ -469,8 +469,8 @@ if (!auth()->user()->isAdmin() && !auth()->user()->isModerator()) {
 1. **Modify Timer Update Frequency**:
 
 ```php
-// In app/Console/Kernel.php
-$schedule->command('matches:update-timers')->everyFiveMinutes(); // Change frequency
+// In app/Console/Kernel.phpphp
+$schedule->command('football:update-timers')->everyFiveMinutes(); // Change frequency
 ```
 
 2. **Custom Timer Logic**:
@@ -661,9 +661,12 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 4. **Timer System Issues**:
 
     - Verify cron job is running: `crontab -l`
-    - Test timer command manually: `php artisan matches:update-timers`
+    - Test timer command manually: `php artisan football:update-timers`
     - Check Laravel scheduler: `php artisan schedule:list`
     - Verify timer updates in database
+    - **Important**: Timer only works for matches with status='in_progress' AND timer_running=true
+    - Use Control Panel to start a match properly (this sets both status and timer_running)
+    - Check running matches: `php artisan tinker --execute="App\Models\FootballMatch::where('timer_running', true)->get(['id', 'match_title', 'status', 'current_match_time']);"`
 
 5. **Role-Based Access Issues**:
 
@@ -726,31 +729,3 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 ---
 
 **Built with ❤️ using Laravel, Reverb, and modern web technologies**
-
-## 🆕 Recent Updates
-
-### Version 2.0 Features
-
--   ✅ **Role-Based Access Control**: Admin vs Client user permissions
--   ✅ **Automatic Timer System**: Match timers run automatically with scheduled commands
--   ✅ **Enhanced WebSocket Events**: Timer updates broadcast in real-time
--   ✅ **Login Redirect Optimization**: Users land on football matches after authentication
--   ✅ **Improved User Registration**: Automatic Client role assignment
--   ✅ **Enhanced Security**: Controller middleware protection for admin functions
--   ✅ **UI/UX Improvements**: Role-based interface elements and navigation
-
-### Key Security Features
-
--   Middleware-level protection for admin routes
--   Role-based UI rendering
--   Automatic 403 responses for unauthorized access
--   Client-side validation with role checks
-
-### Performance Enhancements
-
--   Efficient timer update system (runs every minute)
--   Optimized WebSocket broadcasting
--   Reduced database queries with role relationships
--   Improved frontend JavaScript with role-based logic
-
-For questions or support, please create an issue in the repository.

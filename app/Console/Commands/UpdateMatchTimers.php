@@ -42,7 +42,11 @@ class UpdateMatchTimers extends Command
 
         foreach ($runningMatches as $match) {
             try {
-                $currentTime = $match->current_match_time;
+                // Increment the timer by 1 minute
+                $currentTime = $match->current_match_time + 1;
+                
+                // Update the current_match_time in the database
+                $match->update(['current_match_time' => $currentTime]);
                 
                 // Create a more complete match data structure for broadcasting
                 $matchData = [

@@ -114,26 +114,49 @@
                         <div class="mb-6">
                             <h4 class="text-lg font-medium text-gray-700 mb-3">Match Status</h4>
                             <div class="space-y-2">
+                                <!-- Not Started Button - Always available for reset -->
                                 <button class="status-btn w-full" data-status="not_started">
                                     <span class="flex items-center justify-center">
-                                        <span class="mr-2">⏳</span> Not Started
+                                        <span class="mr-2">⏳</span> Reset to Not Started
                                     </span>
                                 </button>
-                                <button class="status-btn w-full" data-status="in_progress">
-                                    <span class="flex items-center justify-center">
-                                        <span class="mr-2">⚽</span> In Progress
-                                    </span>
-                                </button>
-                                <button class="status-btn w-full" data-status="half_time">
-                                    <span class="flex items-center justify-center">
-                                        <span class="mr-2">⏸️</span> Half Time
-                                    </span>
-                                </button>
-                                <button class="status-btn w-full" data-status="finished">
-                                    <span class="flex items-center justify-center">
-                                        <span class="mr-2">🏁</span> Finished
-                                    </span>
-                                </button>
+
+                                <!-- In Progress Button - Always available if not finished -->
+                                @if ($match->status !== 'finished')
+                                    <button class="status-btn w-full" data-status="in_progress">
+                                        <span class="flex items-center justify-center">
+                                            <span class="mr-2">⚽</span>
+                                            {{ $match->status === 'not_started' ? 'Start Match' : 'Resume Match' }}
+                                        </span>
+                                    </button>
+                                @endif
+
+                                <!-- Half Time Button - Only available after match has started -->
+                                @if (in_array($match->status, ['in_progress', 'half_time']))
+                                    <button class="status-btn w-full" data-status="half_time">
+                                        <span class="flex items-center justify-center">
+                                            <span class="mr-2">⏸️</span> Half Time
+                                        </span>
+                                    </button>
+                                @endif
+
+                                <!-- Finished Button - Only available after match has started -->
+                                @if (in_array($match->status, ['in_progress', 'half_time']))
+                                    <button class="status-btn w-full finished-btn" data-status="finished">
+                                        <span class="flex items-center justify-center">
+                                            <span class="mr-2">🏁</span> End Match
+                                        </span>
+                                    </button>
+                                @endif
+
+                                <!-- Match Already Finished Message -->
+                                @if ($match->status === 'finished')
+                                    <div class="w-full p-3 bg-gray-100 border border-gray-300 rounded-lg text-center">
+                                        <span class="flex items-center justify-center text-gray-600">
+                                            <span class="mr-2">🏁</span> Match Finished
+                                        </span>
+                                    </div>
+                                @endif
                             </div>
                             <div class="mt-3 text-sm text-gray-600">
                                 Current Status: <span id="status-indicator"
@@ -233,6 +256,14 @@
 
         .status-btn.active {
             @apply bg-blue-500 hover:bg-blue-600 text-white border-blue-700 shadow-lg transform scale-105;
+        }
+
+        .finished-btn {
+            @apply bg-red-100 hover:bg-red-200 text-red-800 border-red-300;
+        }
+
+        .finished-btn:hover {
+            @apply bg-red-500 text-white border-red-700 transform scale-105;
         }
 
         .start-match-btn {
@@ -335,20 +366,32 @@
                     const status = $(this).data('status');
                     const buttonText = $(this).text().trim();
 
-                    // Confirm for important status changes
+                    // Enhanced confirmation messages for important status changes
                     if (status === 'finished') {
                         if (!confirm(
-                                'Are you sure you want to finish this match? This action cannot be undone.'
-                                )) {
+                                'Are you sure you want to END this match? The timer will stop and this action cannot be undone.'
+                            )) {
                             return;
                         }
                     } else if (status === 'in_progress' && $(this).hasClass('start-match-btn')) {
-                        if (!confirm('Ready to start the match? The match time will be set to 0.')) {
+                        if (!confirm(
+                                'Ready to start the match? The match time will be set to 0 and the timer will begin automatically.'
+                                )) {
                             return;
                         }
                         // Also set time to 0 when starting match
                         $('#match_time').val(0);
                         updateTime();
+                    } else if (status === 'half_time') {
+                        if (!confirm('Move to Half Time? This will pause the automatic timer.')) {
+                            return;
+                        }
+                    } else if (status === 'not_started') {
+                        if (!confirm(
+                                'Reset match to Not Started? This will stop the timer and reset the match status.'
+                                )) {
+                            return;
+                        }
                     }
 
                     updateStatus(status, buttonText);
@@ -421,37 +464,64 @@
                             updateStatusButtons(status);
                             updateStatusIndicator(status);
 
-                            // Handle timer based on status
+                            // Enhanced timer handling based on status
                             if (status === 'in_progress') {
+                                // Start or resume timer
                                 currentMatchTime = response.match.current_match_time || 0;
                                 resumeClientTimer();
                                 $('#current-time').text(currentMatchTime + "'");
                                 $('#match_time').val(currentMatchTime);
+                            } else if (status === 'finished') {
+                                // Stop timer permanently and record final time
+                                stopClientTimer();
+                                currentMatchTime = response.match.match_time;
+                                $('#current-time').text(currentMatchTime + "'");
+                                $('#match_time').val(currentMatchTime);
+                                // Disable time controls when match is finished
+                                $('#time-form input, #time-form button, .time-btn').prop('disabled',
+                                    true);
                             } else {
+                                // Pause timer for other statuses (half_time, not_started)
                                 stopClientTimer();
                                 if (response.match.match_time !== undefined) {
                                     currentMatchTime = response.match.match_time;
                                     $('#current-time').text(currentMatchTime + "'");
                                     $('#match_time').val(currentMatchTime);
                                 }
+                                // Re-enable time controls if not finished
+                                if (status !== 'finished') {
+                                    $('#time-form input, #time-form button, .time-btn').prop('disabled',
+                                        false);
+                                }
                             }
 
-                            // Show appropriate message
-                            let message = buttonText ? `${buttonText} - Status updated!` :
-                                'Status updated successfully!';
-                            if (status === 'in_progress' && buttonText.includes('START')) {
-                                message = '🏁 Match Started! Timer is now running automatically!';
+                            // Enhanced status messages
+                            let message = 'Status updated successfully!';
+                            if (status === 'in_progress') {
+                                if (buttonText.includes('Start') || buttonText.includes('START')) {
+                                    message = '🏁 Match Started! Timer is now running automatically!';
+                                } else {
+                                    message = '▶️ Match Resumed! Timer is running again!';
+                                }
                             } else if (status === 'half_time') {
-                                message = '⏸️ Half Time - Timer paused';
+                                message = '⏸️ Half Time - Timer paused, awaiting second half';
                             } else if (status === 'finished') {
-                                message = '🏁 Match Finished - Final time recorded';
+                                message = '🏁 Match Finished! Timer stopped and final score recorded';
+                            } else if (status === 'not_started') {
+                                message = '⏳ Match Reset - Ready to start again';
                             }
 
                             showNotification(message, 'success');
 
-                            // Hide start button if match is started
+                            // Handle UI updates based on status
                             if (status === 'in_progress') {
+                                // Hide start button and show status controls
                                 $('.start-match-btn').closest('.mb-6').slideUp();
+                            } else if (status === 'finished') {
+                                // Reload page to show finished state properly
+                                setTimeout(() => {
+                                    window.location.reload();
+                                }, 2000);
                             }
                         } else {
                             showNotification('Failed to update status', 'error');

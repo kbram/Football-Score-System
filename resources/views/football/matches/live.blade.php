@@ -25,7 +25,12 @@
                 <div class="bg-gradient-to-r from-blue-600 to-green-600 text-white p-6">
                     <div class="flex justify-between items-center">
                         <div class="text-sm font-medium" id="match-status">{{ $match->status_text }}</div>
-                        <div class="text-sm" id="match-time">{{ $match->match_time }}'</div>
+                        <div class="text-sm" id="match-time">
+                            @php
+                                $headerTime = $match->current_match_time ?? ($match->match_time ?? 0);
+                            @endphp
+                            {{ $headerTime }}'
+                        </div>
                     </div>
                 </div>
 
@@ -43,7 +48,15 @@
                         <!-- VS and Time -->
                         <div class="text-center">
                             <div class="text-2xl font-bold text-gray-400 mb-2">VS</div>
-                            <div class="text-lg text-gray-600" id="current-time">{{ $match->match_time }}'</div>
+                            <div class="text-lg text-gray-600" id="current-time">
+                                @php
+                                    $displayTime = $match->current_match_time ?? ($match->match_time ?? 0);
+                                    if ($match->status === 'not_started' && $displayTime == 0) {
+                                        $displayTime = 0;
+                                    }
+                                @endphp
+                                {{ $displayTime }}'
+                            </div>
                         </div>
 
                         <!-- Team B -->
@@ -162,8 +175,21 @@
             document.getElementById('team-a-score').textContent = match.team_a_score;
             document.getElementById('team-b-score').textContent = match.team_b_score;
             document.getElementById('match-status').textContent = match.status_text;
-            document.getElementById('match-time').textContent = match.match_time + "'";
-            document.getElementById('current-time').textContent = match.match_time + "'";
+
+            // Use current_match_time if available and valid, fallback to match_time, default to 0
+            let displayTime = 0;
+            if (match.current_match_time !== undefined && match.current_match_time !== null) {
+                displayTime = match.current_match_time;
+            } else if (match.match_time !== undefined && match.match_time !== null) {
+                displayTime = match.match_time;
+            }
+
+            // Ensure displayTime is a valid number
+            displayTime = parseInt(displayTime) || 0;
+
+            document.getElementById('match-time').textContent = displayTime + "'";
+            document.getElementById('current-time').textContent = displayTime + "'";
+
             document.getElementById('last-updated').textContent = new Date(match.updated_at).toLocaleTimeString();
         }
 
@@ -207,6 +233,7 @@
                 'score_update': '⚽ Goal Scored!',
                 'status_update': '📊 Status Change',
                 'time_update': '⏱️ Time Update',
+                'timer_update': '⏱️ Timer Update',
                 'match_created': '🆕 Match Created',
                 'match_updated': '✏️ Match Updated'
             };

@@ -198,7 +198,12 @@ class FootballMatchController extends Controller
                 return '<span class="badge ' . $statusClass . '">' . $match->status_text . '</span>';
             })
             ->editColumn('match_time', function ($match) {
-                return $match->match_time . ' min';
+                $displayTime = $match->current_match_time ?? $match->match_time;
+                return $displayTime . ' min';
+            })
+            ->addColumn('current_time', function ($match) {
+                $displayTime = $match->current_match_time ?? $match->match_time;
+                return $displayTime . ' min';
             })
             ->editColumn('created_at', function ($match) {
                 return $match->created_at->format('d M Y, H:i');
